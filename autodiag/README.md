@@ -13,12 +13,6 @@
 
 **Розумний діагностичний стенд з AI-асистентом IRIS**
 
-!\[Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)
-!\[Flask](https://img.shields.io/badge/Flask-3.x-lightgrey?logo=flask)
-!\[Gemini](https://img.shields.io/badge/Gemini-2.5\_Flash-orange?logo=google)
-!\[OBD](https://img.shields.io/badge/OBD--II-ELM327-green)
-!\[License](https://img.shields.io/badge/License-MIT-blue)
-
 </div>
 
 \---
