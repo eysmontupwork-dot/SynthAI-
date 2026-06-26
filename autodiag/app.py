@@ -79,7 +79,18 @@ if not CARS_FILE.exists():
 # --- Потокобезпечне сховище сесій ---
 _sessions_lock = threading.Lock()
 _session_histories = {}  # {session_id: [messages]}
-current_session_id = str(uuid.uuid4())[:8]
+_current_session_id = str(uuid.uuid4())[:8]
+
+
+def get_current_session_id():
+    with _sessions_lock:
+        return _current_session_id
+
+
+def set_current_session_id(session_id):
+    global _current_session_id
+    with _sessions_lock:
+        _current_session_id = session_id
 
 
 def get_history(session_id):
@@ -266,7 +277,7 @@ def chat():
     data = request.json
     user_input = data.get("message", "")
     # Підтримка session_id від клієнта, якщо передано
-    session_id = data.get("session_id", current_session_id)
+    session_id = data.get("session_id", get_current_session_id())
     if not user_input:
         return jsonify({"reply": ""})
 
@@ -580,7 +591,6 @@ def sessions():
 
 @app.route("/session/<session_id>")
 def load_session(session_id):
-    global current_session_id
     session_file = HISTORY_DIR / f"{session_id}.json"
     if not session_file.exists():
         return jsonify({"error": "not found"}), 404
@@ -588,7 +598,7 @@ def load_session(session_id):
         data = json.load(f)
     with _sessions_lock:
         _session_histories[session_id] = [SYSTEM_PROMPT] + data["messages"]
-    current_session_id = session_id
+    set_current_session_id(session_id)
     return jsonify(data)
 
 
@@ -604,9 +614,8 @@ def delete_session(session_id):
 
 @app.route("/new_session", methods=["POST"])
 def new_session():
-    global current_session_id
     new_id = str(uuid.uuid4())[:8]
-    current_session_id = new_id
+    set_current_session_id(new_id)
     reset_history(new_id)
     return jsonify({"id": new_id})
 

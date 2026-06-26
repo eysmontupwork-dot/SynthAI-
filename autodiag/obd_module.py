@@ -48,6 +48,8 @@ def _safe_eval_formula(formula, variables):
 
 
 def ensure_port():
+    # rfcomm connect blocks for the lifetime of the connection by design — Popen
+    # without wait() is intentional here, not a leak.
     if not os.path.exists(OBD_PORT):
         subprocess.Popen(
             ["sudo", "rfcomm", "connect", "0", OBD_MAC, "1"],
@@ -55,7 +57,15 @@ def ensure_port():
             stderr=subprocess.DEVNULL
         )
         time.sleep(5)
-        subprocess.run(["sudo", "chmod", "666", OBD_PORT])
+        if not os.path.exists(OBD_PORT):
+            print(f"[OBD] {OBD_PORT} ще не з'явився після rfcomm connect — адаптер може бути не в зоні досяжності")
+            return False
+        try:
+            subprocess.run(["sudo", "chmod", "666", OBD_PORT], timeout=5)
+        except subprocess.TimeoutExpired:
+            print("[OBD] chmod на rfcomm0 завис (timeout)")
+            return False
+    return True
 
 
 class ELMConnection:
@@ -63,7 +73,8 @@ class ELMConnection:
         self.ser = None
 
     def connect(self, protocol='6'):
-        ensure_port()
+        if not ensure_port():
+            return False
         try:
             self.ser = serial.Serial(OBD_PORT, 38400, timeout=3)
             time.sleep(0.5)
