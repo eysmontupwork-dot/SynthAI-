@@ -197,6 +197,19 @@ autodiag/
 
 ---
 
+## Тести
+
+Юніт-тести покривають безпечний обчислювач формул PID, парсинг DTC та валідацію API (без реального Bluetooth/Gemini):
+
+```bash
+cd autodiag
+source venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+```
+
+---
+
 ## Підтримка
 
 Створював це з 0 знань на диплом
@@ -386,6 +399,19 @@ Click the 🎤 button in the bottom-right corner — IRIS will switch to voice c
 ### Specific sensors
 
 > *"What's the engine temperature?"* / *"What's the RPM?"* / *"What's the battery voltage?"*
+
+---
+
+## Tests
+
+Unit tests cover the safe PID formula evaluator, DTC parsing, and API validation (no real Bluetooth/Gemini needed):
+
+```bash
+cd autodiag
+source venv/bin/activate
+pip install -r requirements-dev.txt
+pytest
+```
 
 ---
 
