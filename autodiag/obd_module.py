@@ -6,6 +6,9 @@ import json
 import re
 import ast
 import operator
+import logging
+
+logger = logging.getLogger("synthai.obd")
 
 # ВИПРАВЛЕНО: MAC читається з .env, а не хардкодиться
 OBD_MAC = os.getenv("OBD_MAC", "AA:BB:CC:11:22:33")
@@ -58,12 +61,12 @@ def ensure_port():
         )
         time.sleep(5)
         if not os.path.exists(OBD_PORT):
-            print(f"[OBD] {OBD_PORT} ще не з'явився після rfcomm connect — адаптер може бути не в зоні досяжності")
+            logger.warning(f"{OBD_PORT} ще не з'явився після rfcomm connect — адаптер може бути не в зоні досяжності")
             return False
         try:
             subprocess.run(["sudo", "chmod", "666", OBD_PORT], timeout=5)
         except subprocess.TimeoutExpired:
-            print("[OBD] chmod на rfcomm0 завис (timeout)")
+            logger.error("chmod на rfcomm0 завис (timeout)")
             return False
     return True
 
@@ -91,7 +94,7 @@ class ELMConnection:
                 return False
             return True
         except Exception as e:
-            print(f"ELM connect error: {e}")
+            logger.error(f"ELM connect error: {e}")
             return False
 
     def _send(self, cmd, timeout=3):
@@ -160,7 +163,7 @@ class ELMConnection:
                     codes.append(code)
                 i += 4
         except Exception as e:
-            print(f"[OBD] Помилка парсингу DTC ('{raw}'): {e}")
+            logger.error(f"Помилка парсингу DTC ('{raw}'): {e}")
         return codes
 
     def read_pid(self, pid_hex):
@@ -179,7 +182,7 @@ class ELMConnection:
 
             # ВИПРАВЛЕНО: безпечний eval — тільки дозволені символи
             if not _SAFE_FORMULA_RE.match(formula):
-                print(f"[SECURITY] Небезпечна формула відхилена: {formula}")
+                logger.warning(f"[SECURITY] Небезпечна формула відхилена: {formula}")
                 return None
 
             header_len = 2 + len(mode.replace("0", "4", 1)) + len(pid)
@@ -197,7 +200,7 @@ class ELMConnection:
             result = _safe_eval_formula(formula, {"A": A, "B": B, "C": C, "D": D})
             return round(result, 2)
         except Exception as e:
-            print(f"[OBD] Помилка обчислення PID '{pid_info.get('name', '?')}' (formula='{pid_info.get('formula', '?')}'): {e}")
+            logger.error(f"Помилка обчислення PID '{pid_info.get('name', '?')}' (formula='{pid_info.get('formula', '?')}'): {e}")
             return None
 
     def close(self):
@@ -205,7 +208,7 @@ class ELMConnection:
             try:
                 self.ser.close()
             except Exception as e:
-                print(f"[OBD] Помилка закриття serial-порту: {e}")
+                logger.error(f"Помилка закриття serial-порту: {e}")
             self.ser = None
 
 
@@ -259,14 +262,14 @@ def get_obd_data():
         dtc = conn.read_dtc()
         data["dtc_codes"] = dtc
     except Exception as e:
-        print(f"[OBD] Помилка читання DTC: {e}")
+        logger.error(f"Помилка читання DTC: {e}")
         data["dtc_codes"] = []
 
     try:
         pending = conn.read_pending_dtc()
         data["current_dtc"] = pending
     except Exception as e:
-        print(f"[OBD] Помилка читання pending DTC: {e}")
+        logger.error(f"Помилка читання pending DTC: {e}")
         data["current_dtc"] = []
 
     conn.close()

@@ -2,10 +2,13 @@ import json
 import os
 import re
 import threading
+import logging
 from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger("synthai.adapter_researcher")
 
 RESEARCH_KEY = os.getenv("GEMINI_RESEARCH_API_KEY")
 research_client = None
@@ -40,7 +43,7 @@ def _safe_research_and_update(adapter: dict, car: dict):
     try:
         research_and_update(adapter, car)
     except Exception as e:
-        print(f"[ADAPTER RESEARCH ERROR] {adapter.get('id', '?')}: {e}")
+        logger.error(f"Помилка дослідження адаптера {adapter.get('id', '?')}: {e}")
 
 
 def get_pending_car():
@@ -58,7 +61,7 @@ def research_and_update(adapter: dict, car: dict):
         car.get("year", "")
     )
     update_adapter_with_car(adapter["id"], car, caps)
-    print(f"[ADAPTER_READY] {adapter['id']}|{caps.get('summary', '')}")
+    logger.info(f"Адаптер готовий: {adapter['id']} | {caps.get('summary', '')}")
 
 
 def research_adapter(name: str, description: str, car_make: str = "", car_model: str = "", car_year: str = "") -> dict:
@@ -134,15 +137,15 @@ def research_adapter(name: str, description: str, car_make: str = "", car_model:
         # ВИПРАВЛЕНО: надійне витягування JSON через regex
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if not match:
-            print(f"[RESEARCH] JSON не знайдено у відповіді Gemini")
+            logger.warning("JSON не знайдено у відповіді Gemini")
             return _default_caps()
 
         return json.loads(match.group(0))
     except json.JSONDecodeError as e:
-        print(f"[RESEARCH] Помилка парсингу JSON: {e}")
+        logger.error(f"Помилка парсингу JSON: {e}")
         return _default_caps()
     except Exception as e:
-        print(f"[RESEARCH] Помилка запиту: {e}")
+        logger.error(f"Помилка запиту до Gemini: {e}")
         return _default_caps()
 
 

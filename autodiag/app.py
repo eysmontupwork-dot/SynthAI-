@@ -6,11 +6,16 @@ import socket
 import threading
 import uuid
 import datetime
+import logging
 from pathlib import Path
 from google import genai
 from dotenv import load_dotenv
 
+from logging_config import setup_logging
+
 load_dotenv()
+setup_logging()
+logger = logging.getLogger("synthai.app")
 
 app = Flask(__name__)
 
@@ -22,7 +27,7 @@ if GEMINI_API_KEY:
 # --- Захист API від несанкціонованого доступу в локальній мережі ---
 API_TOKEN = os.getenv("API_TOKEN", "")
 if not API_TOKEN:
-    print("[WARNING] API_TOKEN не встановлено в .env — API-роути не захищені!")
+    logger.warning("API_TOKEN не встановлено в .env — API-роути не захищені!")
 
 # Сторінки (HTML-шаблони), які можна завантажити без токена — самі по собі не містять даних
 _PUBLIC_PATHS = {"/", "/dashboard", "/adapters-page", "/cars"}
@@ -134,7 +139,7 @@ def load_sessions():
                 first_msg = next((m["content"][:50] for m in data["messages"] if m["role"] == "user"), "Діалог")
                 sessions.append({"id": data["id"], "date": data["date"], "preview": first_msg})
         except Exception as e:
-            print(f"[SESSIONS] Не вдалось прочитати {f.name}: {e}")
+            logger.warning(f"Не вдалось прочитати сесію {f.name}: {e}")
     return sessions
 
 
@@ -358,7 +363,7 @@ def chat():
                         full_reply += chunk.text
                         yield f"data: {json.dumps({'token': chunk.text, 'mode': 'online'})}\n\n"
             except Exception as e:
-                print(f"Gemini error: {e}")
+                logger.error(f"Gemini error: {e}")
                 try:
                     stream = ollama.chat(model="gemma3:12b", messages=messages, stream=True)
                     for chunk in stream:
@@ -366,7 +371,7 @@ def chat():
                         full_reply += token
                         yield f"data: {json.dumps({'token': token, 'mode': 'offline'})}\n\n"
                 except Exception as e2:
-                    print(f"Ollama fallback error: {e2}")
+                    logger.error(f"Ollama fallback error: {e2}")
                     yield f"data: {json.dumps({'token': 'Помилка підключення до AI.', 'mode': 'offline'})}\n\n"
         else:
             try:
@@ -376,7 +381,7 @@ def chat():
                     full_reply += token
                     yield f"data: {json.dumps({'token': token, 'mode': 'offline'})}\n\n"
             except Exception as e:
-                print(f"Ollama error: {e}")
+                logger.error(f"Ollama error: {e}")
                 yield f"data: {json.dumps({'token': 'Ollama недоступна. Перевірте підключення.', 'mode': 'offline'})}\n\n"
 
         if full_reply:
@@ -468,9 +473,9 @@ def api_recheck_adapter(adapter_id):
                 car.get("make", ""), car.get("model", ""), car.get("year", "")
             )
             update_adapter_with_car(adapter_id, car, caps)
-            print(f"[RECHECK] {adapter['name']} — {len(caps.get('pids', []))} PID")
+            logger.info(f"Recheck: {adapter['name']} — {len(caps.get('pids', []))} PID")
         except Exception as e:
-            print(f"[RECHECK ERROR] {e}")
+            logger.error(f"Recheck error: {e}")
 
     threading.Thread(target=recheck, daemon=True).start()
     return jsonify({"ok": True})
@@ -500,7 +505,7 @@ def adapter_status():
                         car = adapter.get("car_context") or {}
                         yield f"data: {json.dumps({'status': adapter.get('status'), 'adapter': adapter.get('name'), 'car': car, 'summary': caps.get('summary', ''), 'sensors': caps.get('sensors_available', []), 'actuators': caps.get('actuators_available', [])})}\n\n"
             except Exception as e:
-                print(f"[ADAPTER STATUS ERROR] {e}")
+                logger.error(f"Adapter status error: {e}")
             time.sleep(3)
 
     return Response(generate(), mimetype="text/event-stream")

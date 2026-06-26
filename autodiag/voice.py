@@ -3,6 +3,9 @@ import threading
 import tempfile
 import os
 import time
+import logging
+
+logger = logging.getLogger("synthai.voice")
 
 tts_lock = threading.Lock()
 
@@ -20,7 +23,7 @@ def _init_pygame():
                 pygame.mixer.init()
                 _pygame_initialized = True
             except Exception as e:
-                print(f"[VOICE] pygame init error: {e}")
+                logger.error(f"pygame init error: {e}")
 
 
 recognizer = sr.Recognizer()
@@ -58,7 +61,7 @@ def speak(text):
                 time.sleep(0.05)
             os.unlink(path)
         except Exception as e:
-            print(f"TTS error: {e}")
+            logger.error(f"TTS error: {e}")
 
 
 def listen(online: bool = True):
@@ -69,37 +72,37 @@ def listen(online: bool = True):
     """
     try:
         with sr.Microphone(sample_rate=44100) as source:
-            print("Калібрую мікрофон...")
+            logger.info("Калібрую мікрофон...")
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            print("Слухаю...")
+            logger.info("Слухаю...")
             audio = recognizer.listen(source, timeout=10, phrase_time_limit=15)
 
-        print("Розпізнаю...")
+        logger.info("Розпізнаю...")
 
         if online:
             try:
                 text = recognizer.recognize_google(audio, language="uk-UA")
-                print(f"Розпізнано (Google): {text}")
+                logger.info(f"Розпізнано (Google): {text}")
                 return text
             except sr.RequestError as e:
-                print(f"[VOICE] Google STT недоступний (офлайн?): {e}")
+                logger.warning(f"Google STT недоступний (офлайн?): {e}")
                 # Тут можна підключити faster-whisper як офлайн-fallback:
                 # return _recognize_whisper(audio)
                 return None
         else:
             # Офлайн: використати faster-whisper (якщо потрібно — розкоментуйте нижче)
             # return _recognize_whisper(audio)
-            print("[VOICE] Офлайн-режим: голос недоступний без faster-whisper")
+            logger.info("Офлайн-режим: голос недоступний без faster-whisper")
             return None
 
     except sr.WaitTimeoutError:
-        print("Час очікування вичерпано")
+        logger.info("Час очікування вичерпано")
         return None
     except sr.UnknownValueError:
-        print("Не вдалось розпізнати мову")
+        logger.info("Не вдалось розпізнати мову")
         return None
     except Exception as e:
-        print(f"STT error: {e}")
+        logger.error(f"STT error: {e}")
         return None
 
 
