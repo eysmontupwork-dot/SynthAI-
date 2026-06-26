@@ -7,6 +7,7 @@ import re
 import ast
 import operator
 import logging
+import threading
 
 logger = logging.getLogger("synthai.obd")
 
@@ -212,24 +213,61 @@ class ELMConnection:
             self.ser = None
 
 
-def get_obd_data():
+# --- Пул з'єднань: одне довготривале з'єднання замість перепідключення на кожен запит ---
+_pool_lock = threading.Lock()
+_shared_conn = None
+
+
+def _ensure_connection_locked():
+    """Повертає живе ELMConnection або None. Викликач має тримати _pool_lock."""
+    global _shared_conn
+    if _shared_conn and _shared_conn.ser and _shared_conn.ser.is_open:
+        test = _shared_conn._send("ATI", timeout=1)
+        if test and "ERROR" not in test.upper():
+            return _shared_conn
+        logger.info("Існуюче OBD з'єднання неживе — перепідключення")
+        _shared_conn.close()
+        _shared_conn = None
+
     conn = ELMConnection()
-    connected = conn.connect(protocol='6')
+    if conn.connect(protocol='6'):
+        _shared_conn = conn
+        return conn
+    conn.close()
+    return None
 
-    data = {}
 
-    voltage = conn.get_voltage()
-    data["voltage"] = {"label": "Напруга бортової мережі", "value": voltage}
+def release_connection():
+    """Закриває спільне з'єднання з OBD (напр. при завершенні застосунку)."""
+    global _shared_conn
+    with _pool_lock:
+        if _shared_conn:
+            _shared_conn.close()
+            _shared_conn = None
 
-    elm_ver = conn.get_elm_version()
-    data["elm_version"] = {"label": "Версія ELM", "value": elm_ver}
 
-    if not connected:
-        data["dtc_codes"] = []
-        data["current_dtc"] = []
-        conn.close()
-        return data
+def get_obd_data():
+    with _pool_lock:
+        conn = _ensure_connection_locked()
+        data = {}
 
+        if not conn:
+            data["voltage"] = {"label": "Напруга бортової мережі", "value": ""}
+            data["elm_version"] = {"label": "Версія ELM", "value": ""}
+            data["dtc_codes"] = []
+            data["current_dtc"] = []
+            return data
+
+        voltage = conn.get_voltage()
+        data["voltage"] = {"label": "Напруга бортової мережі", "value": voltage}
+
+        elm_ver = conn.get_elm_version()
+        data["elm_version"] = {"label": "Версія ELM", "value": elm_ver}
+
+        return _read_obd_data(conn, data)
+
+
+def _read_obd_data(conn, data):
     from adapters import get_active_adapter
     adapter = get_active_adapter()
     pids = []
@@ -272,7 +310,6 @@ def get_obd_data():
         logger.error(f"Помилка читання pending DTC: {e}")
         data["current_dtc"] = []
 
-    conn.close()
     return data
 
 
@@ -314,8 +351,8 @@ def format_obd_data(data):
 
 
 def clear_dtc():
-    conn = ELMConnection()
-    conn.connect(protocol='6')
-    result = conn.clear_dtc()
-    conn.close()
-    return result
+    with _pool_lock:
+        conn = _ensure_connection_locked()
+        if not conn:
+            return False
+        return conn.clear_dtc()
