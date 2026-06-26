@@ -159,8 +159,8 @@ class ELMConnection:
                 if code != "P0000":
                     codes.append(code)
                 i += 4
-        except:
-            pass
+        except Exception as e:
+            print(f"[OBD] Помилка парсингу DTC ('{raw}'): {e}")
         return codes
 
     def read_pid(self, pid_hex):
@@ -196,15 +196,16 @@ class ELMConnection:
 
             result = _safe_eval_formula(formula, {"A": A, "B": B, "C": C, "D": D})
             return round(result, 2)
-        except:
+        except Exception as e:
+            print(f"[OBD] Помилка обчислення PID '{pid_info.get('name', '?')}' (formula='{pid_info.get('formula', '?')}'): {e}")
             return None
 
     def close(self):
         if self.ser:
             try:
                 self.ser.close()
-            except:
-                pass
+            except Exception as e:
+                print(f"[OBD] Помилка закриття serial-порту: {e}")
             self.ser = None
 
 
@@ -257,13 +258,15 @@ def get_obd_data():
     try:
         dtc = conn.read_dtc()
         data["dtc_codes"] = dtc
-    except:
+    except Exception as e:
+        print(f"[OBD] Помилка читання DTC: {e}")
         data["dtc_codes"] = []
 
     try:
         pending = conn.read_pending_dtc()
         data["current_dtc"] = pending
-    except:
+    except Exception as e:
+        print(f"[OBD] Помилка читання pending DTC: {e}")
         data["current_dtc"] = []
 
     conn.close()

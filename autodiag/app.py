@@ -133,8 +133,8 @@ def load_sessions():
                 data = json.load(fp)
                 first_msg = next((m["content"][:50] for m in data["messages"] if m["role"] == "user"), "Діалог")
                 sessions.append({"id": data["id"], "date": data["date"], "preview": first_msg})
-        except:
-            pass
+        except Exception as e:
+            print(f"[SESSIONS] Не вдалось прочитати {f.name}: {e}")
     return sessions
 
 
